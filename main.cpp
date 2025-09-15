@@ -9,8 +9,9 @@ const char* vertexShaderSource = R"(
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec2 aTexCoord;
 out vec2 TexCoord;
+uniform vec2 offset;
 void main() {
-  gl_Position = vec4(aPos, 0.0, 1.0);
+  gl_Position = vec4(aPos + offset, 0.0, 1.0);
   TexCoord = aTexCoord;
 }
 )";
@@ -24,6 +25,61 @@ void main() {
   FragColor = texture(texture1, TexCoord);
 }
 )";
+
+// Globals for mouse drag
+bool dragging = false;
+double lastX = 0, lastY = 0;
+float kopiOffsetX = 0.0f, kopiOffsetY = 0.0f;
+
+// Mouse button callback
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+  if (button == GLFW_MOUSE_BUTTON_LEFT) {
+    if (action == GLFW_PRESS) {
+      dragging = true;
+      glfwGetCursorPos(window, &lastX, &lastY);
+    } else if (action == GLFW_RELEASE) {
+      dragging = false;
+    }
+  }
+}
+
+// Mouse move callback
+void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+  if (dragging) {
+    int width, height;
+    glfwGetWindowSize(window, &width, &height);
+    float dx = (xpos - lastX) / (width / 2.0f);
+    float dy = (lastY - ypos) / (height / 2.0f); // invert y
+    kopiOffsetX += dx;
+    kopiOffsetY += dy;
+    lastX = xpos;
+    lastY = ypos;
+  }
+}
+
+GLuint loadTexture(const char* path, int* outWidth = nullptr, int* outHeight = nullptr) {
+  int width, height, nrChannels;
+  stbi_set_flip_vertically_on_load(true);
+  unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
+  if (!data) {
+    std::cerr << "Failed to load texture: " << path << "\n";
+    return 0;
+  }
+  GLuint texture;
+  glGenTextures(1, &texture);
+  glBindTexture(GL_TEXTURE_2D, texture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  GLenum format = nrChannels == 4 ? GL_RGBA : GL_RGB;
+  glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+  glGenerateMipmap(GL_TEXTURE_2D);
+  stbi_image_free(data);
+  if (outWidth) *outWidth = width;
+  if (outHeight) *outHeight = height;
+  return texture;
+}
 
 int main() {
   // Initialize GLFW
@@ -50,7 +106,9 @@ int main() {
     return -1;
   }
 
-  // Build and compile shaders
+  glfwSetMouseButtonCallback(window, mouse_button_callback);
+  glfwSetCursorPosCallback(window, cursor_position_callback);
+
   GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
   glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
   glCompileShader(vertexShader);
@@ -67,8 +125,8 @@ int main() {
   glDeleteShader(vertexShader);
   glDeleteShader(fragmentShader);
 
-  // Quad vertices (positions and texture coords)
-  float vertices[] = {
+  // Fullscreen quad for world map
+  float mapVertices[] = {
     // positions   // tex coords
     -1.0f,  1.0f,  0.0f, 1.0f, // top-left
     -1.0f, -1.0f,  0.0f, 0.0f, // bottom-left
@@ -80,17 +138,39 @@ int main() {
     0, 2, 3
   };
 
-  GLuint VBO, VAO, EBO;
-  glGenVertexArrays(1, &VAO);
-  glGenBuffers(1, &VBO);
-  glGenBuffers(1, &EBO);
+  GLuint mapVBO, mapVAO, mapEBO;
+  glGenVertexArrays(1, &mapVAO);
+  glGenBuffers(1, &mapVBO);
+  glGenBuffers(1, &mapEBO);
 
-  glBindVertexArray(VAO);
+  glBindVertexArray(mapVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, mapVBO);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(mapVertices), mapVertices, GL_STATIC_DRAW);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mapEBO);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+  glEnableVertexAttribArray(1);
 
-  glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+  // Quad for kopi (smaller, centered at offset)
+  float kopiVertices[] = {
+    // positions   // tex coords
+    -0.1f,  0.2f,  0.0f, 1.0f, // top-left
+    -0.1f, -0.2f,  0.0f, 0.0f, // bottom-left
+     0.1f, -0.2f,  1.0f, 0.0f, // bottom-right
+     0.1f,  0.2f,  1.0f, 1.0f  // top-right
+  };
 
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+  GLuint kopiVBO, kopiVAO, kopiEBO;
+  glGenVertexArrays(1, &kopiVAO);
+  glGenBuffers(1, &kopiVBO);
+  glGenBuffers(1, &kopiEBO);
+
+  glBindVertexArray(kopiVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, kopiVBO);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(kopiVertices), kopiVertices, GL_STATIC_DRAW);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, kopiEBO);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
   // Position attribute
@@ -100,38 +180,30 @@ int main() {
   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
   glEnableVertexAttribArray(1);
 
-  // Load texture
-  int width, height, nrChannels;
-  stbi_set_flip_vertically_on_load(true);
-  unsigned char* data = stbi_load("res/world_map.png", &width, &height, &nrChannels, 0);
-  if (!data) {
-    std::cerr << "Failed to load texture\n";
+  // Load textures
+  GLuint mapTexture = loadTexture("res/world_map.png");
+  GLuint kopiTexture = loadTexture("res/kopi.png");
+  if (!mapTexture || !kopiTexture) {
     return -1;
   }
-
-  GLuint texture;
-  glGenTextures(1, &texture);
-  glBindTexture(GL_TEXTURE_2D, texture);
-
-  // Set texture parameters
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-  GLenum format = nrChannels == 4 ? GL_RGBA : GL_RGB;
-  glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-  glGenerateMipmap(GL_TEXTURE_2D);
-
-  stbi_image_free(data);
 
   // Render loop
   while (!glfwWindowShouldClose(window)) {
     glClear(GL_COLOR_BUFFER_BIT);
 
     glUseProgram(shaderProgram);
-    glBindVertexArray(VAO);
-    glBindTexture(GL_TEXTURE_2D, texture);
+
+    // Draw world map (no offset)
+    glBindVertexArray(mapVAO);
+    glBindTexture(GL_TEXTURE_2D, mapTexture);
+    GLint offsetLoc = glGetUniformLocation(shaderProgram, "offset");
+    glUniform2f(offsetLoc, 0.0f, 0.0f);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    // Draw kopi overlay (with offset)
+    glBindVertexArray(kopiVAO);
+    glBindTexture(GL_TEXTURE_2D, kopiTexture);
+    glUniform2f(offsetLoc, kopiOffsetX, kopiOffsetY);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     glfwSwapBuffers(window);
@@ -139,11 +211,15 @@ int main() {
   }
 
   // Cleanup
-  glDeleteVertexArrays(1, &VAO);
-  glDeleteBuffers(1, &VBO);
-  glDeleteBuffers(1, &EBO);
+  glDeleteVertexArrays(1, &mapVAO);
+  glDeleteBuffers(1, &mapVBO);
+  glDeleteBuffers(1, &mapEBO);
+  glDeleteVertexArrays(1, &kopiVAO);
+  glDeleteBuffers(1, &kopiVBO);
+  glDeleteBuffers(1, &kopiEBO);
   glDeleteProgram(shaderProgram);
-  glDeleteTextures(1, &texture);
+  glDeleteTextures(1, &mapTexture);
+  glDeleteTextures(1, &kopiTexture);
 
   glfwDestroyWindow(window);
   glfwTerminate();
