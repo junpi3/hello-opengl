@@ -2,9 +2,10 @@
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
 
+#include <cmath>
 #include <fstream>
-#include <sstream>
 #include <iostream>
+#include <sstream>
 
 // Utility to load shader source from file
 std::string loadShaderSource(const char* filePath) {
@@ -50,18 +51,27 @@ struct DragState {
   bool dragging = false;
   double lastX = 0, lastY = 0;
   float offsetX = 0.0f, offsetY = 0.0f;
+  float angle = 0.0f; // in radians
 };
 
 // Helper to check if mouse is inside kopi quad (NDC coordinates)
-bool isMouseInKopi(GLFWwindow* window, double xpos, double ypos, float kopiOffX, float kopiOffY) {
+bool isMouseInKopi(GLFWwindow* window, double xpos, double ypos, float xoff, float yoff, float angle = 0.0f) {
   int winW, winH;
   glfwGetWindowSize(window, &winW, &winH);
   // Convert window coordinates to NDC
   float xNdc = (xpos / winW) * 2.0f - 1.0f;
   float yNdc = 1.0f - (ypos / winH) * 2.0f;
-  // Kopi quad center is at (kopiOffX, kopiOffY)
-  return xNdc >= (kopiOffX - kKopiHalfW) && xNdc <= (kopiOffX + kKopiHalfW) &&
-         yNdc >= (kopiOffY - kKopiHalfH) && yNdc <= (kopiOffY + kKopiHalfH);
+
+  // Undo rotation for hit test
+  float dx = xNdc - xoff;
+  float dy = yNdc - yoff;
+  float cosA = cos(-angle);
+  float sinA = sin(-angle);
+  float xr = dx * cosA - dy * sinA;
+  float yr = dx * sinA + dy * cosA;
+
+  return xr >= -kKopiHalfW && xr <= kKopiHalfW &&
+         yr >= -kKopiHalfH && yr <= kKopiHalfH;
 }
 
 // Mouse button callback
@@ -71,13 +81,23 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     if (action == GLFW_PRESS) {
       double xpos, ypos;
       glfwGetCursorPos(window, &xpos, &ypos);
-      if (isMouseInKopi(window, xpos, ypos, s->offsetX, s->offsetY)) {
+      if (isMouseInKopi(window, xpos, ypos, s->offsetX, s->offsetY, s->angle)) {
         s->dragging = true;
         s->lastX = xpos;
         s->lastY = ypos;
       }
     } else if (action == GLFW_RELEASE) {
       s->dragging = false;
+    }
+  }
+  if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
+    double xpos, ypos;
+    glfwGetCursorPos(window, &xpos, &ypos);
+    if (isMouseInKopi(window, xpos, ypos, s->offsetX, s->offsetY, s->angle)) {
+      // Rotate 45 degrees clockwise
+      s->angle += 3.14159265f / 4.0f;
+      if (s->angle > 3.14159265f * 2.0f)
+        s->angle -= 3.14159265f * 2.0f;
     }
   }
 }
@@ -216,17 +236,21 @@ int main() {
 
     glUseProgram(shaderProgram);
 
-    // Draw world map (no offset)
+    GLint offsetLoc = glGetUniformLocation(shaderProgram, "offset");
+    GLint angleLoc = glGetUniformLocation(shaderProgram, "angle");
+
+    // Draw world map (no offset, no rotation)
     glBindVertexArray(mapVAO);
     glBindTexture(GL_TEXTURE_2D, mapTexture);
-    GLint offsetLoc = glGetUniformLocation(shaderProgram, "offset");
     glUniform2f(offsetLoc, 0.0f, 0.0f);
+    glUniform1f(angleLoc, 0.0f); // No rotation for map
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-    // Draw kopi overlay (with offset)
+    // Draw kopi overlay (with offset and rotation)
     glBindVertexArray(kopiVAO);
     glBindTexture(GL_TEXTURE_2D, kopiTexture);
     glUniform2f(offsetLoc, dragState.offsetX, dragState.offsetY);
+    glUniform1f(angleLoc, dragState.angle); // Kopi rotation
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     glfwSwapBuffers(window);
