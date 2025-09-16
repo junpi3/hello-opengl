@@ -18,6 +18,33 @@ std::string loadShaderSource(const char* filePath) {
   return buffer.str();
 }
 
+// Fullscreen quad for world map (constexpr)
+constexpr float kMapVerts[] = {
+  // positions   // tex coords
+  -1.0f,  1.0f,  0.0f, 1.0f, // top-left
+  -1.0f, -1.0f,  0.0f, 0.0f, // bottom-left
+   1.0f, -1.0f,  1.0f, 0.0f, // bottom-right
+   1.0f,  1.0f,  1.0f, 1.0f  // top-right
+};
+
+// Kopi quad half-width and half-height
+constexpr float kKopiHalfW = 0.1f;
+constexpr float kKopiHalfH = 0.2f;
+
+// Quad for kopi (smaller, centered at offset, uses kKopiHalfW/kKopiHalfH)
+constexpr float kKopiVerts[] = {
+  // positions         // tex coords
+  -kKopiHalfW,  kKopiHalfH,  0.0f, 1.0f, // top-left
+  -kKopiHalfW, -kKopiHalfH,  0.0f, 0.0f, // bottom-left
+   kKopiHalfW, -kKopiHalfH,  1.0f, 0.0f, // bottom-right
+   kKopiHalfW,  kKopiHalfH,  1.0f, 1.0f  // top-right
+};
+
+constexpr unsigned int kIdxs[] = {
+  0, 1, 2,
+  0, 2, 3
+};
+
 // Struct to hold dragging state
 struct DragState {
   bool dragging = false;
@@ -25,13 +52,30 @@ struct DragState {
   float offsetX = 0.0f, offsetY = 0.0f;
 };
 
+// Helper to check if mouse is inside kopi quad (NDC coordinates)
+bool isMouseInKopi(GLFWwindow* window, double xpos, double ypos, float kopiOffX, float kopiOffY) {
+  int winW, winH;
+  glfwGetWindowSize(window, &winW, &winH);
+  // Convert window coordinates to NDC
+  float xNdc = (xpos / winW) * 2.0f - 1.0f;
+  float yNdc = 1.0f - (ypos / winH) * 2.0f;
+  // Kopi quad center is at (kopiOffX, kopiOffY)
+  return xNdc >= (kopiOffX - kKopiHalfW) && xNdc <= (kopiOffX + kKopiHalfW) &&
+         yNdc >= (kopiOffY - kKopiHalfH) && yNdc <= (kopiOffY + kKopiHalfH);
+}
+
 // Mouse button callback
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
   DragState* s = static_cast<DragState*>(glfwGetWindowUserPointer(window));
   if (button == GLFW_MOUSE_BUTTON_LEFT) {
     if (action == GLFW_PRESS) {
-      s->dragging = true;
-      glfwGetCursorPos(window, &s->lastX, &s->lastY);
+      double xpos, ypos;
+      glfwGetCursorPos(window, &xpos, &ypos);
+      if (isMouseInKopi(window, xpos, ypos, s->offsetX, s->offsetY)) {
+        s->dragging = true;
+        s->lastX = xpos;
+        s->lastY = ypos;
+      }
     } else if (action == GLFW_RELEASE) {
       s->dragging = false;
     }
@@ -76,33 +120,6 @@ GLuint loadTexture(const char* path, int* outWidth = nullptr, int* outHeight = n
   if (outHeight) *outHeight = height;
   return texture;
 }
-
-// Fullscreen quad for world map (constexpr)
-constexpr float kMapVerts[] = {
-  // positions   // tex coords
-  -1.0f,  1.0f,  0.0f, 1.0f, // top-left
-  -1.0f, -1.0f,  0.0f, 0.0f, // bottom-left
-   1.0f, -1.0f,  1.0f, 0.0f, // bottom-right
-   1.0f,  1.0f,  1.0f, 1.0f  // top-right
-};
-
-// Kopi quad half-width and half-height
-constexpr float kKopiHalfW = 0.1f;
-constexpr float kKopiHalfH = 0.2f;
-
-// Quad for kopi (smaller, centered at offset, uses kKopiHalfW/kKopiHalfH)
-constexpr float kKopiVerts[] = {
-  // positions         // tex coords
-  -kKopiHalfW,  kKopiHalfH,  0.0f, 1.0f, // top-left
-  -kKopiHalfW, -kKopiHalfH,  0.0f, 0.0f, // bottom-left
-   kKopiHalfW, -kKopiHalfH,  1.0f, 0.0f, // bottom-right
-   kKopiHalfW,  kKopiHalfH,  1.0f, 1.0f  // top-right
-};
-
-constexpr unsigned int kIdxs[] = {
-  0, 1, 2,
-  0, 2, 3
-};
 
 int main() {
   // Initialize GLFW
