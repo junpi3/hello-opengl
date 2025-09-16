@@ -85,6 +85,33 @@ GLuint loadTexture(const char* path, int* outWidth = nullptr, int* outHeight = n
   return texture;
 }
 
+// Fullscreen quad for world map (constexpr)
+constexpr float kMapVerts[] = {
+  // positions   // tex coords
+  -1.0f,  1.0f,  0.0f, 1.0f, // top-left
+  -1.0f, -1.0f,  0.0f, 0.0f, // bottom-left
+   1.0f, -1.0f,  1.0f, 0.0f, // bottom-right
+   1.0f,  1.0f,  1.0f, 1.0f  // top-right
+};
+
+// Kopi quad half-width and half-height
+constexpr float kKopiHalfW = 0.1f;
+constexpr float kKopiHalfH = 0.2f;
+
+// Quad for kopi (smaller, centered at offset, uses kKopiHalfW/kKopiHalfH)
+constexpr float kKopiVerts[] = {
+  // positions         // tex coords
+  -kKopiHalfW,  kKopiHalfH,  0.0f, 1.0f, // top-left
+  -kKopiHalfW, -kKopiHalfH,  0.0f, 0.0f, // bottom-left
+   kKopiHalfW, -kKopiHalfH,  1.0f, 0.0f, // bottom-right
+   kKopiHalfW,  kKopiHalfH,  1.0f, 1.0f  // top-right
+};
+
+constexpr unsigned int kIdxs[] = {
+  0, 1, 2,
+  0, 2, 3
+};
+
 int main() {
   // Initialize GLFW
   if (!glfwInit()) {
@@ -132,19 +159,6 @@ int main() {
   glDeleteShader(vertexShader);
   glDeleteShader(fragmentShader);
 
-  // Fullscreen quad for world map
-  float mapVertices[] = {
-    // positions   // tex coords
-    -1.0f,  1.0f,  0.0f, 1.0f, // top-left
-    -1.0f, -1.0f,  0.0f, 0.0f, // bottom-left
-     1.0f, -1.0f,  1.0f, 0.0f, // bottom-right
-     1.0f,  1.0f,  1.0f, 1.0f  // top-right
-  };
-  unsigned int indices[] = {
-    0, 1, 2,
-    0, 2, 3
-  };
-
   GLuint mapVBO, mapVAO, mapEBO;
   glGenVertexArrays(1, &mapVAO);
   glGenBuffers(1, &mapVBO);
@@ -152,22 +166,13 @@ int main() {
 
   glBindVertexArray(mapVAO);
   glBindBuffer(GL_ARRAY_BUFFER, mapVBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(mapVertices), mapVertices, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(kMapVerts), kMapVerts, GL_STATIC_DRAW);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mapEBO);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(kIdxs), kIdxs, GL_STATIC_DRAW);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
   glEnableVertexAttribArray(1);
-
-  // Quad for kopi (smaller, centered at offset)
-  float kopiVertices[] = {
-    // positions   // tex coords
-    -0.1f,  0.2f,  0.0f, 1.0f, // top-left
-    -0.1f, -0.2f,  0.0f, 0.0f, // bottom-left
-     0.1f, -0.2f,  1.0f, 0.0f, // bottom-right
-     0.1f,  0.2f,  1.0f, 1.0f  // top-right
-  };
 
   GLuint kopiVBO, kopiVAO, kopiEBO;
   glGenVertexArrays(1, &kopiVAO);
@@ -176,9 +181,9 @@ int main() {
 
   glBindVertexArray(kopiVAO);
   glBindBuffer(GL_ARRAY_BUFFER, kopiVBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(kopiVertices), kopiVertices, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(kKopiVerts), kKopiVerts, GL_STATIC_DRAW);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, kopiEBO);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(kIdxs), kIdxs, GL_STATIC_DRAW);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
