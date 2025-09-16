@@ -26,34 +26,38 @@ void main() {
 }
 )";
 
-// Globals for mouse drag
-bool dragging = false;
-double lastX = 0, lastY = 0;
-float kopiOffsetX = 0.0f, kopiOffsetY = 0.0f;
+// Struct to hold dragging state
+struct DragState {
+  bool dragging = false;
+  double lastX = 0, lastY = 0;
+  float offsetX = 0.0f, offsetY = 0.0f;
+};
 
 // Mouse button callback
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+  DragState* s = static_cast<DragState*>(glfwGetWindowUserPointer(window));
   if (button == GLFW_MOUSE_BUTTON_LEFT) {
     if (action == GLFW_PRESS) {
-      dragging = true;
-      glfwGetCursorPos(window, &lastX, &lastY);
+      s->dragging = true;
+      glfwGetCursorPos(window, &s->lastX, &s->lastY);
     } else if (action == GLFW_RELEASE) {
-      dragging = false;
+      s->dragging = false;
     }
   }
 }
 
 // Mouse move callback
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-  if (dragging) {
+  DragState* s = static_cast<DragState*>(glfwGetWindowUserPointer(window));
+  if (s->dragging) {
     int width, height;
     glfwGetWindowSize(window, &width, &height);
-    float dx = (xpos - lastX) / (width / 2.0f);
-    float dy = (lastY - ypos) / (height / 2.0f); // invert y
-    kopiOffsetX += dx;
-    kopiOffsetY += dy;
-    lastX = xpos;
-    lastY = ypos;
+    float dx = (xpos - s->lastX) / (width / 2.0f);
+    float dy = (s->lastY - ypos) / (height / 2.0f); // invert y
+    s->offsetX += dx;
+    s->offsetY += dy;
+    s->lastX = xpos;
+    s->lastY = ypos;
   }
 }
 
@@ -105,6 +109,9 @@ int main() {
     std::cerr << "Failed to initialize GLAD\n";
     return -1;
   }
+
+  DragState dragState;
+  glfwSetWindowUserPointer(window, &dragState);
 
   glfwSetMouseButtonCallback(window, mouse_button_callback);
   glfwSetCursorPosCallback(window, cursor_position_callback);
@@ -172,11 +179,8 @@ int main() {
   glBufferData(GL_ARRAY_BUFFER, sizeof(kopiVertices), kopiVertices, GL_STATIC_DRAW);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, kopiEBO);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-  // Position attribute
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
   glEnableVertexAttribArray(0);
-  // Texture coord attribute
   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
   glEnableVertexAttribArray(1);
 
@@ -203,7 +207,7 @@ int main() {
     // Draw kopi overlay (with offset)
     glBindVertexArray(kopiVAO);
     glBindTexture(GL_TEXTURE_2D, kopiTexture);
-    glUniform2f(offsetLoc, kopiOffsetX, kopiOffsetY);
+    glUniform2f(offsetLoc, dragState.offsetX, dragState.offsetY);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     glfwSwapBuffers(window);
