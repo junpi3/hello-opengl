@@ -2,29 +2,21 @@
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
 
+#include <fstream>
+#include <sstream>
 #include <iostream>
 
-const char* vertexShaderSource = R"(
-#version 330 core
-layout (location = 0) in vec2 aPos;
-layout (location = 1) in vec2 aTexCoord;
-out vec2 TexCoord;
-uniform vec2 offset;
-void main() {
-  gl_Position = vec4(aPos + offset, 0.0, 1.0);
-  TexCoord = aTexCoord;
+// Utility to load shader source from file
+std::string loadShaderSource(const char* filePath) {
+  std::ifstream file(filePath);
+  if (!file) {
+    std::cerr << "Failed to open shader file: " << filePath << "\n";
+    return "";
+  }
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  return buffer.str();
 }
-)";
-
-const char* fragmentShaderSource = R"(
-#version 330 core
-out vec4 FragColor;
-in vec2 TexCoord;
-uniform sampler2D texture1;
-void main() {
-  FragColor = texture(texture1, TexCoord);
-}
-)";
 
 // Struct to hold dragging state
 struct DragState {
@@ -139,16 +131,21 @@ int main() {
 
   DragState dragState;
   glfwSetWindowUserPointer(window, &dragState);
-
   glfwSetMouseButtonCallback(window, mouse_button_callback);
   glfwSetCursorPosCallback(window, cursor_position_callback);
 
+  // Load shaders from files
+  std::string vertexShaderSource = loadShaderSource("glsl/vertex.glsl");
+  std::string fragmentShaderSource = loadShaderSource("glsl/fragment.glsl");
+  const char* vShaderSrc = vertexShaderSource.c_str();
+  const char* fShaderSrc = fragmentShaderSource.c_str();
+
   GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
+  glShaderSource(vertexShader, 1, &vShaderSrc, nullptr);
   glCompileShader(vertexShader);
 
   GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragmentShader, 1, &fragmentShaderSource, nullptr);
+  glShaderSource(fragmentShader, 1, &fShaderSrc, nullptr);
   glCompileShader(fragmentShader);
 
   GLuint shaderProgram = glCreateProgram();

@@ -11,6 +11,11 @@ add_subdirectory(ext/stb_image) # image loader
 add_executable(hello main.cpp)
 target_link_libraries(hello glad glfw glm stb_image)
 
+add_custom_command(             # shaders folder
+  TARGET hello POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/glsl $<TARGET_FILE_DIR:hello>/glsl
+)
 add_custom_command(             # resources folder
   TARGET hello POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
