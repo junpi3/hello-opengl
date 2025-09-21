@@ -1,6 +1,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
+#include <miniaudio.h>
 
 #include <cmath>
 #include <fstream>
@@ -142,6 +143,23 @@ GLuint loadTexture(const char* path, int* outWidth = nullptr, int* outHeight = n
 }
 
 int main() {
+  // Initialize miniaudio engine
+  ma_engine engine;
+  if (ma_engine_init(NULL, &engine) != MA_SUCCESS) {
+    std::cerr << "Failed to initialize miniaudio engine\n";
+    return -1;
+  }
+
+  // Play res/first.wav on repeat
+  ma_sound sound;
+  if (ma_sound_init_from_file(&engine, "res/first.wav", 0, NULL, NULL, &sound) != MA_SUCCESS) {
+    std::cerr << "Failed to load res/first.wav\n";
+    ma_engine_uninit(&engine);
+    return -1;
+  }
+  ma_sound_set_looping(&sound, MA_TRUE);
+  ma_sound_start(&sound);
+
   // Initialize GLFW
   if (!glfwInit()) {
     std::cerr << "Failed to initialize GLFW\n";
@@ -274,7 +292,10 @@ int main() {
   glDeleteProgram(shaderProgram);
   glDeleteTextures(1, &mapTexture);
   glDeleteTextures(1, &kopiTexture);
+  ma_sound_uninit(&sound);
+  ma_engine_uninit(&engine);
 
   glfwDestroyWindow(window);
   glfwTerminate();
+  return 0;
 }
