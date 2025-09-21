@@ -6,10 +6,11 @@ set(CMAKE_CXX_STANDARD 17)
 add_subdirectory(ext/glad)      # opengl loader
 add_subdirectory(ext/glfw)      # window and input manager
 add_subdirectory(ext/glm)       # math
+add_subdirectory(ext/miniaudio) # audio
 add_subdirectory(ext/stb_image) # image loader
 
 add_executable(hello main.cpp)
-target_link_libraries(hello glad glfw glm stb_image)
+target_link_libraries(hello glad glfw glm miniaudio stb_image)
 
 add_custom_target(copy_shaders ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory
