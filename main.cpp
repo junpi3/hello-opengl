@@ -47,12 +47,44 @@ constexpr unsigned int kIdxs[] = {
   0, 2, 3
 };
 
+constexpr char* kWavFiles[] = {
+  "res/first.wav",
+  "res/second.wav",
+  "res/third.wav",
+  "res/fourth.wav"
+};
+
+static ma_sound kSounds[4];
+
 // Struct to hold dragging state
 struct DragState {
+  enum Quadrant: uint8_t { TOP_RIGHT = 0, TOP_LEFT = 1, BOTTOM_LEFT = 2, BOTTOM_RIGHT = 3 };
+  Quadrant lastQuad = TOP_RIGHT;
+
   bool dragging = false;
   double lastX = 0, lastY = 0;
   float offsetX = 0.0f, offsetY = 0.0f;
   float angle = 0.0f; // in radians
+
+  void updateSound() {
+    Quadrant newQuad = quadrant();
+    if (newQuad != lastQuad) {
+      ma_sound_stop(&kSounds[lastQuad]);
+      // Start sound from the beginning
+      ma_sound_seek_to_pcm_frame(&kSounds[newQuad], 0);
+      ma_sound_start(&kSounds[newQuad]);
+      lastQuad = newQuad;
+    }
+  }
+  
+ private:
+  // Returns 0: top-right, 1: top-left, 2: bottom-left, 3: bottom-right
+  Quadrant quadrant() const {
+    if (offsetX >= 0 && offsetY >= 0) return TOP_RIGHT;
+    if (offsetX < 0 && offsetY >= 0)  return TOP_LEFT;
+    if (offsetX < 0 && offsetY < 0)   return BOTTOM_LEFT;
+    return BOTTOM_RIGHT;
+  }
 };
 
 // Helper to check if mouse is inside kopi quad (NDC coordinates)
@@ -89,6 +121,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
       }
     } else if (action == GLFW_RELEASE) {
       s->dragging = false;
+      s->updateSound();
     }
   }
   if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
@@ -150,15 +183,17 @@ int main() {
     return -1;
   }
 
-  // Play res/first.wav on repeat
-  ma_sound sound;
-  if (ma_sound_init_from_file(&engine, "res/first.wav", 0, NULL, NULL, &sound) != MA_SUCCESS) {
-    std::cerr << "Failed to load res/first.wav\n";
-    ma_engine_uninit(&engine);
-    return -1;
+  // Initialize wav files (static sounds array)
+  for (int i = 0; i < 4; ++i) {
+    if (ma_sound_init_from_file(&engine, kWavFiles[i], 0, NULL, NULL, &kSounds[i]) != MA_SUCCESS) {
+      std::cerr << "Failed to load " << kWavFiles[i] << "\n";
+      ma_engine_uninit(&engine);
+      return -1;
+    }
+    ma_sound_set_looping(&kSounds[i], MA_TRUE);
   }
-  ma_sound_set_looping(&sound, MA_TRUE);
-  ma_sound_start(&sound);
+  // Start the first sound by default
+  ma_sound_start(&kSounds[0]);
 
   // Initialize GLFW
   if (!glfwInit()) {
@@ -292,7 +327,7 @@ int main() {
   glDeleteProgram(shaderProgram);
   glDeleteTextures(1, &mapTexture);
   glDeleteTextures(1, &kopiTexture);
-  ma_sound_uninit(&sound);
+  for (int i = 0; i < 4; ++i) ma_sound_uninit(&kSounds[i]);
   ma_engine_uninit(&engine);
 
   glfwDestroyWindow(window);
