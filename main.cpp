@@ -238,6 +238,7 @@ int main() {
 
     GLint offsetLoc = glGetUniformLocation(shaderProgram, "offset");
     GLint angleLoc = glGetUniformLocation(shaderProgram, "angle");
+    GLint aspectLoc = glGetUniformLocation(shaderProgram, "aspect");
 
     // Draw world map (no offset, no rotation)
     glBindVertexArray(mapVAO);
@@ -246,11 +247,17 @@ int main() {
     glUniform1f(angleLoc, 0.0f); // No rotation for map
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
+    // In your render loop, before drawing kopi:
+    int winW, winH;
+    glfwGetWindowSize(window, &winW, &winH);
+    float aspect = static_cast<float>(winH) / winW;
+
     // Draw kopi overlay (with offset and rotation)
     glBindVertexArray(kopiVAO);
     glBindTexture(GL_TEXTURE_2D, kopiTexture);
     glUniform2f(offsetLoc, dragState.offsetX, dragState.offsetY);
     glUniform1f(angleLoc, dragState.angle); // Kopi rotation
+    glUniform1f(aspectLoc, aspect);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     glfwSwapBuffers(window);
