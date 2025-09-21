@@ -30,7 +30,7 @@ constexpr float kMapVerts[] = {
 
 // Kopi quad half-width and half-height
 constexpr float kKopiHalfW = 0.1f;
-constexpr float kKopiHalfH = 0.2f;
+constexpr float kKopiHalfH = 0.24f;
 
 // Quad for kopi (smaller, centered at offset, uses kKopiHalfW/kKopiHalfH)
 constexpr float kKopiVerts[] = {
