@@ -226,25 +226,37 @@ int main() {
   glfwSetCursorPosCallback(window, cursor_position_callback);
 
   // Load shaders from files
-  std::string vertexShaderSource = loadShaderSource("glsl/vertex.glsl");
-  std::string fragmentShaderSource = loadShaderSource("glsl/fragment.glsl");
-  const char* vShaderSrc = vertexShaderSource.c_str();
-  const char* fShaderSrc = fragmentShaderSource.c_str();
+  std::string vtxShaderMap = loadShaderSource("glsl/vertex_map.glsl");
+  std::string vtxShaderKopi = loadShaderSource("glsl/vertex_kopi.glsl");
+  std::string fragShader = loadShaderSource("glsl/fragment.glsl");
+  const char* mShaderSrc = vtxShaderMap.c_str();
+  const char* kShaderSrc = vtxShaderKopi.c_str();
+  const char* fShaderSrc = fragShader.c_str();
 
-  GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertexShader, 1, &vShaderSrc, nullptr);
-  glCompileShader(vertexShader);
+  GLuint mVtxShader = glCreateShader(GL_VERTEX_SHADER);
+  glShaderSource(mVtxShader, 1, &mShaderSrc, nullptr);
+  glCompileShader(mVtxShader);
+  
+  GLuint kVtxShader = glCreateShader(GL_VERTEX_SHADER);
+  glShaderSource(kVtxShader, 1, &kShaderSrc, nullptr);
+  glCompileShader(kVtxShader);
 
   GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
   glShaderSource(fragmentShader, 1, &fShaderSrc, nullptr);
   glCompileShader(fragmentShader);
 
-  GLuint shaderProgram = glCreateProgram();
-  glAttachShader(shaderProgram, vertexShader);
-  glAttachShader(shaderProgram, fragmentShader);
-  glLinkProgram(shaderProgram);
+  GLuint mapShaderProgram = glCreateProgram();
+  glAttachShader(mapShaderProgram, mVtxShader);
+  glAttachShader(mapShaderProgram, fragmentShader);
+  glLinkProgram(mapShaderProgram);
 
-  glDeleteShader(vertexShader);
+  GLuint kopiShaderProgram = glCreateProgram();
+  glAttachShader(kopiShaderProgram, kVtxShader);
+  glAttachShader(kopiShaderProgram, fragmentShader);
+  glLinkProgram(kopiShaderProgram);
+
+  glDeleteShader(mVtxShader);
+  glDeleteShader(kVtxShader);
   glDeleteShader(fragmentShader);
 
   GLuint mapVBO, mapVAO, mapEBO;
@@ -288,25 +300,22 @@ int main() {
   while (!glfwWindowShouldClose(window)) {
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glUseProgram(shaderProgram);
-
-    GLint offsetLoc = glGetUniformLocation(shaderProgram, "offset");
-    GLint angleLoc = glGetUniformLocation(shaderProgram, "angle");
-    GLint aspectLoc = glGetUniformLocation(shaderProgram, "aspect");
-
-    // Draw world map (no offset, no rotation)
+    // Draw world map
+    glUseProgram(mapShaderProgram);
     glBindVertexArray(mapVAO);
     glBindTexture(GL_TEXTURE_2D, mapTexture);
-    glUniform2f(offsetLoc, 0.0f, 0.0f);
-    glUniform1f(angleLoc, 0.0f); // No rotation for map
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-    // In your render loop, before drawing kopi:
+    // Draw kopi overlay
+    glUseProgram(kopiShaderProgram);
+    GLint offsetLoc = glGetUniformLocation(kopiShaderProgram, "offset");
+    GLint angleLoc = glGetUniformLocation(kopiShaderProgram, "angle");
+    GLint aspectLoc = glGetUniformLocation(kopiShaderProgram, "aspect");
+
     int winW, winH;
     glfwGetWindowSize(window, &winW, &winH);
     float aspect = static_cast<float>(winH) / winW;
 
-    // Draw kopi overlay (with offset and rotation)
     glBindVertexArray(kopiVAO);
     glBindTexture(GL_TEXTURE_2D, kopiTexture);
     glUniform2f(offsetLoc, kopiState.offX, kopiState.offY);
@@ -325,7 +334,8 @@ int main() {
   glDeleteVertexArrays(1, &kopiVAO);
   glDeleteBuffers(1, &kopiVBO);
   glDeleteBuffers(1, &kopiEBO);
-  glDeleteProgram(shaderProgram);
+  glDeleteProgram(mapShaderProgram);
+  glDeleteProgram(kopiShaderProgram);
   glDeleteTextures(1, &mapTexture);
   glDeleteTextures(1, &kopiTexture);
   for (int i = 0; i < 4; ++i) ma_sound_uninit(&kSounds[i]);
