@@ -56,6 +56,7 @@ struct KopiState {
   bool isPressed = false;
   double lastX = 0.0f, lastY = 0.0f;
   float offX = 0.0f, offY = 0.0f;
+  float panX = 0.0f, panY = 0.0f;
   float angle = 0.0f; // in radians
   Quadrant lastQ = TOP_RIGHT;
 
@@ -152,6 +153,28 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
   }
 }
 
+constexpr float kZoom = 3.0f;
+constexpr float kPanStep = 0.01f;
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+  if (kZoom == 1.0f) return;
+
+  KopiState* k = static_cast<KopiState*>(glfwGetWindowUserPointer(window));
+  if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+    if (key == GLFW_KEY_LEFT)  k->panX -= kPanStep;
+    if (key == GLFW_KEY_RIGHT) k->panX += kPanStep;
+    if (key == GLFW_KEY_UP)    k->panY += kPanStep;
+    if (key == GLFW_KEY_DOWN)  k->panY -= kPanStep;
+    // Clamp panX and panY
+    const float panLimit = 1.0f / kZoom;
+    if (k->panX < -panLimit) k->panX = -panLimit;
+    if (k->panX >  panLimit) k->panX =  panLimit;
+    if (k->panY < -panLimit) k->panY = -panLimit;
+    if (k->panY >  panLimit) k->panY =  panLimit;
+  }
+}
+
+
 GLuint loadTexture(const char* path, int* outWidth = nullptr, int* outHeight = nullptr) {
   int width, height, nrChannels;
   stbi_set_flip_vertically_on_load(true);
@@ -224,6 +247,7 @@ int main() {
   glfwSetWindowUserPointer(window, &kopiState);
   glfwSetMouseButtonCallback(window, mouse_button_callback);
   glfwSetCursorPosCallback(window, cursor_position_callback);
+  glfwSetKeyCallback(window, key_callback);
 
   // Load shaders from files
   std::string vtxShaderMap = loadShaderSource("glsl/vertex_map.glsl");
@@ -302,8 +326,13 @@ int main() {
 
     // Draw world map
     glUseProgram(mapShaderProgram);
+    GLint zoomLoc = glGetUniformLocation(mapShaderProgram, "zoom");
+    GLint panLoc = glGetUniformLocation(mapShaderProgram, "pan");
+
     glBindVertexArray(mapVAO);
     glBindTexture(GL_TEXTURE_2D, mapTexture);
+    glUniform1f(zoomLoc, kZoom);
+    glUniform2f(panLoc, kopiState.panX, kopiState.panY);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     // Draw kopi overlay
