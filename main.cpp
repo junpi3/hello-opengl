@@ -20,6 +20,9 @@ std::string loadShaderSource(const char* filePath) {
   return buffer.str();
 }
 
+constexpr int kWindowW = 1200;
+constexpr int kWindowH = 600;
+
 // Fullscreen quad for world map (constexpr)
 constexpr float kMapVerts[] = {
   // positions   // tex coords
@@ -47,6 +50,23 @@ constexpr unsigned int kIdxs[] = {
   0, 2, 3
 };
 
+enum Quadrant: uint8_t { TOP_RIGHT = 0, TOP_LEFT = 1, BOTTOM_LEFT = 2, BOTTOM_RIGHT = 3 };
+
+struct KopiState {
+  bool isPressed = false;
+  double lastX = 0.0f, lastY = 0.0f;
+  float offX = 0.0f, offY = 0.0f;
+  float angle = 0.0f; // in radians
+  Quadrant lastQ = TOP_RIGHT;
+
+  Quadrant curQ() const {
+    if (offX >= 0 && offY >= 0) return TOP_RIGHT;
+    if (offX < 0 && offY >= 0)  return TOP_LEFT;
+    if (offX < 0 && offY < 0)   return BOTTOM_LEFT;
+    return BOTTOM_RIGHT;
+  }
+};
+
 constexpr char* kWavFiles[] = {
   "res/first.wav",
   "res/second.wav",
@@ -56,36 +76,17 @@ constexpr char* kWavFiles[] = {
 
 static ma_sound kSounds[4];
 
-// Struct to hold dragging state
-struct DragState {
-  enum Quadrant: uint8_t { TOP_RIGHT = 0, TOP_LEFT = 1, BOTTOM_LEFT = 2, BOTTOM_RIGHT = 3 };
-  Quadrant lastQuad = TOP_RIGHT;
-
-  bool dragging = false;
-  double lastX = 0, lastY = 0;
-  float offsetX = 0.0f, offsetY = 0.0f;
-  float angle = 0.0f; // in radians
-
-  void updateSound() {
-    Quadrant newQuad = quadrant();
-    if (newQuad != lastQuad) {
-      ma_sound_stop(&kSounds[lastQuad]);
-      // Start sound from the beginning
-      ma_sound_seek_to_pcm_frame(&kSounds[newQuad], 0);
-      ma_sound_start(&kSounds[newQuad]);
-      lastQuad = newQuad;
-    }
+void updateSound(KopiState* k) {
+  Quadrant curQ = k->curQ();
+  Quadrant lastQ = k->lastQ;
+  if (curQ != lastQ) {
+    ma_sound_stop(&kSounds[lastQ]);
+    // Start sound from the beginning
+    ma_sound_seek_to_pcm_frame(&kSounds[curQ], 0);
+    ma_sound_start(&kSounds[curQ]);
+    k->lastQ = curQ;
   }
-  
- private:
-  // Returns 0: top-right, 1: top-left, 2: bottom-left, 3: bottom-right
-  Quadrant quadrant() const {
-    if (offsetX >= 0 && offsetY >= 0) return TOP_RIGHT;
-    if (offsetX < 0 && offsetY >= 0)  return TOP_LEFT;
-    if (offsetX < 0 && offsetY < 0)   return BOTTOM_LEFT;
-    return BOTTOM_RIGHT;
-  }
-};
+}
 
 // Helper to check if mouse is inside kopi quad (NDC coordinates)
 bool isMouseInKopi(GLFWwindow* window, double xpos, double ypos, float xoff, float yoff, float angle = 0.0f) {
@@ -109,45 +110,45 @@ bool isMouseInKopi(GLFWwindow* window, double xpos, double ypos, float xoff, flo
 
 // Mouse button callback
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-  DragState* s = static_cast<DragState*>(glfwGetWindowUserPointer(window));
+  KopiState* k = static_cast<KopiState*>(glfwGetWindowUserPointer(window));
   if (button == GLFW_MOUSE_BUTTON_LEFT) {
     if (action == GLFW_PRESS) {
       double xpos, ypos;
       glfwGetCursorPos(window, &xpos, &ypos);
-      if (isMouseInKopi(window, xpos, ypos, s->offsetX, s->offsetY, s->angle)) {
-        s->dragging = true;
-        s->lastX = xpos;
-        s->lastY = ypos;
+      if (isMouseInKopi(window, xpos, ypos, k->offX, k->offY, k->angle)) {
+        k->isPressed = true;
+        k->lastX = xpos;
+        k->lastY = ypos;
       }
     } else if (action == GLFW_RELEASE) {
-      s->dragging = false;
-      s->updateSound();
+      k->isPressed = false;
+      updateSound(k);
     }
   }
   if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
     double xpos, ypos;
     glfwGetCursorPos(window, &xpos, &ypos);
-    if (isMouseInKopi(window, xpos, ypos, s->offsetX, s->offsetY, s->angle)) {
+    if (isMouseInKopi(window, xpos, ypos, k->offX, k->offY, k->angle)) {
       // Rotate 45 degrees clockwise
-      s->angle += 3.14159265f / 4.0f;
-      if (s->angle > 3.14159265f * 2.0f)
-        s->angle -= 3.14159265f * 2.0f;
+      k->angle += 3.14159265f / 4.0f;
+      if (k->angle > 3.14159265f * 2.0f)
+        k->angle -= 3.14159265f * 2.0f;
     }
   }
 }
 
 // Mouse move callback
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-  DragState* s = static_cast<DragState*>(glfwGetWindowUserPointer(window));
-  if (s->dragging) {
+  KopiState* k = static_cast<KopiState*>(glfwGetWindowUserPointer(window));
+  if (k->isPressed) {
     int width, height;
     glfwGetWindowSize(window, &width, &height);
-    float dx = (xpos - s->lastX) / (width / 2.0f);
-    float dy = (s->lastY - ypos) / (height / 2.0f); // invert y
-    s->offsetX += dx;
-    s->offsetY += dy;
-    s->lastX = xpos;
-    s->lastY = ypos;
+    float dx = (xpos - k->lastX) / (width / 2.0f);
+    float dy = (k->lastY - ypos) / (height / 2.0f); // invert y
+    k->offX += dx;
+    k->offY += dy;
+    k->lastX = xpos;
+    k->lastY = ypos;
   }
 }
 
@@ -205,7 +206,7 @@ int main() {
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
   // Create window
-  GLFWwindow* window = glfwCreateWindow(1200, 600, "World Map", nullptr, nullptr);
+  GLFWwindow* window = glfwCreateWindow(kWindowW, kWindowH, "World Map", nullptr, nullptr);
   if (!window) {
     std::cerr << "Failed to create GLFW window\n";
     glfwTerminate();
@@ -219,8 +220,8 @@ int main() {
     return -1;
   }
 
-  DragState dragState;
-  glfwSetWindowUserPointer(window, &dragState);
+  KopiState kopiState;
+  glfwSetWindowUserPointer(window, &kopiState);
   glfwSetMouseButtonCallback(window, mouse_button_callback);
   glfwSetCursorPosCallback(window, cursor_position_callback);
 
@@ -308,8 +309,8 @@ int main() {
     // Draw kopi overlay (with offset and rotation)
     glBindVertexArray(kopiVAO);
     glBindTexture(GL_TEXTURE_2D, kopiTexture);
-    glUniform2f(offsetLoc, dragState.offsetX, dragState.offsetY);
-    glUniform1f(angleLoc, dragState.angle); // Kopi rotation
+    glUniform2f(offsetLoc, kopiState.offX, kopiState.offY);
+    glUniform1f(angleLoc, kopiState.angle);
     glUniform1f(aspectLoc, aspect);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
