@@ -138,6 +138,18 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
   }
 }
 
+void clampKopiToWindow(KopiState* k) {
+  // Kopi quad must stay fully inside NDC [-1, 1]
+  float minX = -1.0f + kKopiHalfW;
+  float maxX =  1.0f - kKopiHalfW;
+  float minY = -1.0f + kKopiHalfH;
+  float maxY =  1.0f - kKopiHalfH;
+  if (k->offX < minX) k->offX = minX;
+  if (k->offX > maxX) k->offX = maxX;
+  if (k->offY < minY) k->offY = minY;
+  if (k->offY > maxY) k->offY = maxY;
+}
+
 // Mouse move callback
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
   KopiState* k = static_cast<KopiState*>(glfwGetWindowUserPointer(window));
@@ -150,6 +162,7 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     k->offY += dy;
     k->lastX = xpos;
     k->lastY = ypos;
+    clampKopiToWindow(k);
   }
 }
 
