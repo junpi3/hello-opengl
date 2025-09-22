@@ -155,25 +155,33 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
 
 constexpr float kZoom = 3.0f;
 constexpr float kPanStep = 0.01f;
+constexpr float kEdgeThr = 0.98f;
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-  if (kZoom == 1.0f) return;
+void maybeAutoPan(KopiState& k) {
+  if (kZoom <= 1.0f) return;
 
-  KopiState* k = static_cast<KopiState*>(glfwGetWindowUserPointer(window));
-  if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-    if (key == GLFW_KEY_LEFT)  k->panX -= kPanStep;
-    if (key == GLFW_KEY_RIGHT) k->panX += kPanStep;
-    if (key == GLFW_KEY_UP)    k->panY += kPanStep;
-    if (key == GLFW_KEY_DOWN)  k->panY -= kPanStep;
-    // Clamp panX and panY
-    const float panLimit = 1.0f / kZoom;
-    if (k->panX < -panLimit) k->panX = -panLimit;
-    if (k->panX >  panLimit) k->panX =  panLimit;
-    if (k->panY < -panLimit) k->panY = -panLimit;
-    if (k->panY >  panLimit) k->panY =  panLimit;
-  }
+  // Kopi quad bounds in NDC
+  float kopiLeft   = k.offX - kKopiHalfW;
+  float kopiRight  = k.offX + kKopiHalfW;
+  float kopiTop    = k.offY + kKopiHalfH;
+  float kopiBottom = k.offY - kKopiHalfH;
+
+  // Pan limits
+  const float panLimit = 1.0f / kZoom;
+
+  // Pan right
+  if (kopiRight > kEdgeThr && k.panX < panLimit)
+    k.panX = std::min(k.panX + kPanStep, panLimit);
+  // Pan left
+  if (kopiLeft < -kEdgeThr && k.panX > -panLimit)
+    k.panX = std::max(k.panX - kPanStep, -panLimit);
+  // Pan up
+  if (kopiTop > kEdgeThr && k.panY < panLimit)
+    k.panY = std::min(k.panY + kPanStep, panLimit);
+  // Pan down
+  if (kopiBottom < -kEdgeThr && k.panY > -panLimit)
+    k.panY = std::max(k.panY - kPanStep, -panLimit);
 }
-
 
 GLuint loadTexture(const char* path, int* outWidth = nullptr, int* outHeight = nullptr) {
   int width, height, nrChannels;
@@ -247,7 +255,6 @@ int main() {
   glfwSetWindowUserPointer(window, &kopiState);
   glfwSetMouseButtonCallback(window, mouse_button_callback);
   glfwSetCursorPosCallback(window, cursor_position_callback);
-  glfwSetKeyCallback(window, key_callback);
 
   // Load shaders from files
   std::string vtxShaderMap = loadShaderSource("glsl/vertex_map.glsl");
@@ -323,6 +330,9 @@ int main() {
   // Render loop
   while (!glfwWindowShouldClose(window)) {
     glClear(GL_COLOR_BUFFER_BIT);
+
+    // Auto-pan map if kopi is near the edge
+    maybeAutoPan(kopiState);
 
     // Draw world map
     glUseProgram(mapShaderProgram);
