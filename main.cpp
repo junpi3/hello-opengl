@@ -166,6 +166,17 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
   }
 }
 
+bool gMuted = false;
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+  if (action == GLFW_PRESS && key == GLFW_KEY_M) {
+    gMuted = !gMuted;
+    for (int i = 0; i < 4; ++i) {
+      ma_sound_set_volume(&kSounds[i], gMuted ? 0.0f : 1.0f);
+    }
+  }
+}
+
 constexpr float kZoom = 3.0f;
 constexpr float kPanStep = 0.01f;
 constexpr float kEdgeThr = 0.98f;
@@ -268,6 +279,7 @@ int main() {
   glfwSetWindowUserPointer(window, &kopiState);
   glfwSetMouseButtonCallback(window, mouse_button_callback);
   glfwSetCursorPosCallback(window, cursor_position_callback);
+  glfwSetKeyCallback(window, key_callback);
 
   // Load shaders from files
   std::string vtxShaderMap = loadShaderSource("glsl/vertex_map.glsl");
